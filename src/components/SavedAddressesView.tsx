@@ -15,7 +15,9 @@ import {
   Star,
   ShieldCheck,
   Eye,
-  ArrowRightLeft
+  ArrowRightLeft,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { AddressRegistration, getUserAddresses, deleteAddressFromFirestore, saveAddressToFirestore } from '../lib/firebase.js';
 import { generateAddressPDF } from '../lib/pdfGenerator.js';
@@ -40,6 +42,9 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'favorites' | 'pending' | 'verified'>('all');
   const [comparisonItem, setComparisonItem] = useState<AddressRegistration | null>(null);
+
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
@@ -77,11 +82,27 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
     localStorage.setItem('address_app_favorites', JSON.stringify(updated));
   };
 
+  const toggleSelectId = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map((item) => item.id));
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to remove this address registration?')) return;
     try {
       await deleteAddressFromFirestore(id);
       setAddresses((prev) => prev.filter((a) => a.id !== id));
+      setSelectedIds((prev) => prev.filter((i) => i !== id));
       if (favorites.includes(id)) {
         const updated = favorites.filter((f) => f !== id);
         setFavorites(updated);
@@ -90,6 +111,62 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
     } catch (e: any) {
       alert('Delete error: ' + e.message);
     }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected address(es)?`)) return;
+
+    try {
+      for (const id of selectedIds) {
+        await deleteAddressFromFirestore(id);
+      }
+      setAddresses((prev) => prev.filter((a) => !selectedIds.includes(a.id)));
+      setSelectedIds([]);
+    } catch (e: any) {
+      alert('Batch delete error: ' + e.message);
+    }
+  };
+
+  const handleBatchExport = () => {
+    if (selectedIds.length === 0) return;
+    const selectedItems = addresses.filter((a) => selectedIds.includes(a.id));
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(selectedItems, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `simone_jovita_batch_export_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handleBatchExportCSV = () => {
+    if (selectedIds.length === 0) return;
+    const selectedItems = addresses.filter((a) => selectedIds.includes(a.id));
+    
+    const headers = ['ID', 'Name', 'Formatted Address', 'Region Code', 'Latitude', 'Longitude', 'Granularity', 'Complete', 'Notes', 'Created At'];
+    const rows = selectedItems.map(item => [
+      item.id,
+      `"${(item.name || '').replace(/"/g, '""')}"`,
+      `"${(item.formattedAddress || '').replace(/"/g, '""')}"`,
+      item.regionCode || 'US',
+      item.lat,
+      item.lng,
+      item.granularity || 'PREMISE',
+      item.complete ? 'Yes' : 'No',
+      `"${(item.notes || '').replace(/"/g, '""')}"`,
+      item.createdAt
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", url);
+    downloadAnchor.setAttribute("download", `simone_jovita_addresses_export_${Date.now()}.csv`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   const filtered = addresses.filter((item) => {
@@ -189,6 +266,60 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
         </div>
       </div>
 
+      {/* Batch Selection & Action Toolbar */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={toggleSelectAll}
+              className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center space-x-2 hover:text-amber-500 transition-colors"
+            >
+              {selectedIds.length === filtered.length && filtered.length > 0 ? (
+                <CheckSquare className="w-4 h-4 text-amber-500" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-400" />
+              )}
+              <span>Select All ({filtered.length})</span>
+            </button>
+            {selectedIds.length > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                {selectedIds.length} selected
+              </span>
+            )}
+          </div>
+
+          {selectedIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 animate-in fade-in">
+              <button
+                onClick={handleBatchExportCSV}
+                className="py-1.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 text-xs font-bold border border-emerald-500/30 transition-all flex items-center space-x-1.5"
+                title="Export selected addresses as formatted CSV"
+              >
+                <FileDown className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Export CSV ({selectedIds.length})</span>
+              </button>
+
+              <button
+                onClick={handleBatchExport}
+                className="py-1.5 px-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 text-xs font-bold border border-blue-500/30 transition-all flex items-center space-x-1.5"
+                title="Export selected addresses as JSON"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-500" />
+                <span>Export JSON ({selectedIds.length})</span>
+              </button>
+
+              <button
+                onClick={handleBatchDelete}
+                className="py-1.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 text-xs font-bold border border-rose-500/30 transition-all flex items-center space-x-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Batch Delete ({selectedIds.length})</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Grid or Empty State */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -221,10 +352,19 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((item) => {
             const isFav = favorites.includes(item.id);
+            const isSelected = selectedIds.includes(item.id);
             return (
               <div
                 key={item.id}
-                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between group"
+                onClick={(e) => {
+                  // Toggle selection on card click if not clicking buttons
+                  toggleSelectId(item.id, e);
+                }}
+                className={`bg-white dark:bg-slate-900 rounded-3xl border transition-all overflow-hidden shadow-sm flex flex-col justify-between group cursor-pointer ${
+                  isSelected
+                    ? 'border-amber-400 ring-2 ring-amber-400/50 bg-amber-50/10'
+                    : 'border-slate-200 dark:border-slate-800 hover:shadow-md'
+                }`}
               >
                 {/* Card Photo / Placeholder */}
                 <div className="relative aspect-video bg-slate-800 overflow-hidden">
@@ -241,11 +381,28 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
                     </div>
                   )}
 
+                  {/* Multi-select Checkbox */}
+                  <button
+                    onClick={(e) => toggleSelectId(item.id, e)}
+                    className={`absolute top-3 left-3 p-2 rounded-xl backdrop-blur-md transition-all shadow-sm ${
+                      isSelected
+                        ? 'bg-amber-400 text-slate-950 shadow-gold scale-105'
+                        : 'bg-slate-900/70 text-slate-300 hover:text-white'
+                    }`}
+                    title={isSelected ? 'Deselect address' : 'Select address for batch action'}
+                  >
+                    {isSelected ? (
+                      <CheckSquare className="w-4 h-4 fill-slate-950 text-amber-400" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                  </button>
+
                   {/* Favorite button */}
                   <button
                     onClick={(e) => toggleFavorite(item.id, e)}
                     title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                    className={`absolute top-3 left-3 p-2 rounded-xl backdrop-blur-md transition-all shadow-sm ${
+                    className={`absolute top-3 left-14 p-2 rounded-xl backdrop-blur-md transition-all shadow-sm ${
                       isFav
                         ? 'bg-amber-400 text-slate-950 scale-105 shadow-gold'
                         : 'bg-slate-900/70 text-slate-300 hover:text-amber-400'
@@ -287,7 +444,10 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
                       </h4>
                       {/* Compare Button */}
                       <button
-                        onClick={() => setComparisonItem(item)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setComparisonItem(item);
+                        }}
                         className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 text-[10px] font-bold transition-colors inline-flex items-center space-x-1 border border-blue-500/20"
                         title="Side-by-side comparison with raw user input"
                       >
@@ -309,7 +469,10 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
                   {/* Action Buttons */}
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                     <button
-                      onClick={() => onSelectAddress(item)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectAddress(item);
+                      }}
                       className="py-1.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors flex items-center space-x-1"
                     >
                       <Compass className="w-3.5 h-3.5 text-blue-500" />
@@ -320,13 +483,14 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
                       href={`https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       title="Open in Google Maps"
                       className="p-2 rounded-xl text-slate-500 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
 
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => onShare(item)}
                         title="Share & QR Code"

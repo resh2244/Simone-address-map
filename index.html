@@ -2,17 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Address Map App - Address Validation & Maps Intelligence</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Simone & Jovita Maps - Address Validation & Maps Intelligence</title>
     <meta name="description" content="Validate submitted addresses with Google Address Validation API, view on Google Maps, store in SQLite & Firestore, with Google Meet calls & Gemini AI intelligence." />
-    <meta property="og:title" content="Address Map App - Address Validation & Maps Intelligence" />
+    <meta property="og:title" content="Simone & Jovita Maps - Address Validation & Maps Intelligence" />
     <meta property="og:description" content="Validate submitted addresses with Google Address Validation API, view on Google Maps, store in SQLite & Firestore, with Google Meet calls & Gemini AI intelligence." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    
+    {/* PWA & Cross-Browser Compatibility Meta Tags */}
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1e293b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Simone & Jovita" />
   </head>
-  <body>
+  <body class="bg-slate-950 text-slate-100 antialiased selection:bg-amber-400 selection:text-slate-950">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

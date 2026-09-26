@@ -210,6 +210,17 @@ app.post('/api/submissions/bulk', requireAdminToken, async (req: Request, res: R
   }
 });
 
+// 3c. GET /api/sync-status -> Returns count of records in SQLite/D1 for environment sync indicator
+app.get('/api/sync-status', async (_req: Request, res: Response) => {
+  try {
+    const list = await getAllSubmissions();
+    res.json({ d1Count: list.length, timestamp: new Date().toISOString(), status: 'synced' });
+  } catch (err: any) {
+    console.error('Sync status error:', err);
+    res.status(500).json({ error: err.message || 'Failed to get sync status', d1Count: 0 });
+  }
+});
+
 // 4. GET /api/submissions -> Requires x-admin-token
 app.get('/api/submissions', requireAdminToken, async (_req: Request, res: Response) => {
   try {

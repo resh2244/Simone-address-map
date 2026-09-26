@@ -14,10 +14,13 @@ import {
   Plus,
   Star,
   ShieldCheck,
-  Eye
+  Eye,
+  ArrowRightLeft
 } from 'lucide-react';
 import { AddressRegistration, getUserAddresses, deleteAddressFromFirestore, saveAddressToFirestore } from '../lib/firebase.js';
 import { generateAddressPDF } from '../lib/pdfGenerator.js';
+import { AddressComparisonModal } from './AddressComparisonModal.js';
+import { EnvironmentSyncStatus } from './EnvironmentSyncStatus.js';
 
 interface SavedAddressesViewProps {
   currentUser: any;
@@ -36,6 +39,8 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'favorites' | 'pending' | 'verified'>('all');
+  const [comparisonItem, setComparisonItem] = useState<AddressRegistration | null>(null);
+
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('address_app_favorites') || '[]');
@@ -105,98 +110,99 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
   });
 
   return (
-    <div className="space-y-6">
-      {/* Top Controls */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-            <span>Saved Addresses &amp; Registrations</span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-gold/30">
+    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6 animate-in fade-in">
+      {/* Environment Sync Status Indicator */}
+      <EnvironmentSyncStatus firestoreCount={addresses.length} />
+
+      {/* Top Banner & Controls */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
+              Saved Addresses &amp; Registrations
+            </h2>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400/20 text-amber-500 border border-gold/30">
               {addresses.length} Total
             </span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Locally saved addresses in Cloudflare D1 &amp; Firestore. These are private records until confirmed via Google&apos;s official review process.
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Manage your registered buildings, compare user inputs with Google standardized validation, and generate dossiers.
           </p>
         </div>
 
-        <button
-          onClick={onAddNew}
-          className="py-2.5 px-5 rounded-2xl bg-gold-gradient text-slate-950 font-bold text-xs shadow-gold hover:opacity-95 transition-all flex items-center justify-center space-x-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Address</span>
-        </button>
-      </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search address or name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-52 sm:w-64"
+            />
+          </div>
 
-      {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search saved locations, addresses, or building names..."
-            className="w-full pl-10 pr-4 py-2.5 text-xs rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
-        </div>
+          {/* Filter Pills */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+            <button
+              onClick={() => setFilterStatus('all')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filterStatus === 'all'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilterStatus('favorites')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center space-x-1 ${
+                filterStatus === 'favorites'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+              <span>Favorites</span>
+            </button>
+            <button
+              onClick={() => setFilterStatus('verified')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filterStatus === 'verified'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              Verified
+            </button>
+          </div>
 
-        <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+          {/* Add New Button */}
           <button
-            onClick={() => setFilterStatus('all')}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-              filterStatus === 'all'
-                ? 'bg-navy-800 text-amber-300 border border-gold/40'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-            }`}
+            onClick={onAddNew}
+            className="py-2 px-4 rounded-xl bg-gold-gradient text-slate-950 font-bold text-xs shadow-gold hover:opacity-95 transition-all flex items-center space-x-1.5"
           >
-            All ({addresses.length})
-          </button>
-          <button
-            onClick={() => setFilterStatus('favorites')}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1 whitespace-nowrap ${
-              filterStatus === 'favorites'
-                ? 'bg-navy-800 text-amber-300 border border-gold/40'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-            }`}
-          >
-            <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-            <span>Favorites ({favorites.length})</span>
-          </button>
-          <button
-            onClick={() => setFilterStatus('pending')}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-              filterStatus === 'pending'
-                ? 'bg-navy-800 text-amber-300 border border-gold/40'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-            }`}
-          >
-            Pending Review
-          </button>
-          <button
-            onClick={() => setFilterStatus('verified')}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-              filterStatus === 'verified'
-                ? 'bg-navy-800 text-amber-300 border border-gold/40'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-            }`}
-          >
-            Validated
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Address</span>
           </button>
         </div>
       </div>
 
-      {/* Cards Grid */}
+      {/* Grid or Empty State */}
       {loading ? (
-        <div className="p-12 text-center text-slate-400 text-xs">
-          Loading saved addresses...
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="bg-white dark:bg-slate-900 rounded-3xl p-6 h-64 animate-pulse border border-slate-200 dark:border-slate-800" />
+          ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="p-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
-          <MapPin className="w-10 h-10 mx-auto text-amber-400/60" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">
-            {filterStatus === 'favorites' ? 'No favorite addresses yet' : 'No saved addresses found'}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-amber-500/10 text-amber-500 mx-auto flex items-center justify-center border border-gold/30">
+            <Compass className="w-8 h-8" />
+          </div>
+          <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+            No Saved Addresses Found
           </h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             {filterStatus === 'favorites'
@@ -274,14 +280,26 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
 
                 {/* Card Content */}
                 <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
-                      {item.name || 'Building / Residence'}
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                        {item.name || 'Building / Residence'}
+                      </h4>
+                      {/* Compare Button */}
+                      <button
+                        onClick={() => setComparisonItem(item)}
+                        className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 text-[10px] font-bold transition-colors inline-flex items-center space-x-1 border border-blue-500/20"
+                        title="Side-by-side comparison with raw user input"
+                      >
+                        <ArrowRightLeft className="w-3 h-3" />
+                        <span>Compare</span>
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
                       {item.formattedAddress}
                     </p>
-                    <div className="mt-2 flex items-center space-x-2 text-[10px] text-slate-400">
+                    <div className="flex items-center space-x-2 text-[10px] text-slate-400">
                       <span>Granularity: {item.granularity}</span>
                       <span>•</span>
                       <span>{new Date(item.createdAt).toLocaleDateString()}</span>
@@ -338,6 +356,14 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
           })}
         </div>
       )}
+
+      {/* Comparison Modal */}
+      <AddressComparisonModal
+        item={comparisonItem}
+        onClose={() => setComparisonItem(null)}
+        onShare={onShare}
+        onSelectAddress={onSelectAddress}
+      />
     </div>
   );
 };

@@ -59,6 +59,17 @@ export default {
         return Response.json(data, { status: googleRes.status, headers: corsHeaders });
       }
 
+      // 3.5. Sync status endpoint for Cloudflare D1
+      if (url.pathname === '/api/sync-status') {
+        try {
+          const resRow = await env.DB.prepare('SELECT COUNT(*) as count FROM submissions').first();
+          const d1Count = resRow?.count || 0;
+          return Response.json({ d1Count, timestamp: new Date().toISOString(), status: 'synced' }, { headers: corsHeaders });
+        } catch (e: any) {
+          return Response.json({ d1Count: 0, timestamp: new Date().toISOString(), status: 'error', error: e.message }, { headers: corsHeaders });
+        }
+      }
+
       // 4. Submissions API backed by Cloudflare D1
       if (url.pathname === '/api/submissions') {
         // GET submissions

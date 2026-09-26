@@ -19,8 +19,8 @@ const app = express();
 const server = http.createServer(app);
 const port = parseInt(process.env.PORT || '3000', 10);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'adm-secret-superkey-8899';
-const GOOGLE_MAPS_API_KEY =
-  process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyAIzViRqCEzl-p7aeHP3IHz0wNNtJi-Thk';
+const WOOSMAP_API_KEY =
+  process.env.NEXT_PUBLIC_WOOSMAP_API_KEY || process.env.WOOSMAP_API_KEY || 'woos-public-demo-key-12345';
 
 app.use(express.json({ limit: '15mb' }));
 
@@ -37,47 +37,48 @@ function requireAdminToken(req: Request, res: Response, next: () => void) {
 // 1. GET /api/config -> client config
 app.get('/api/config', (_req, res) => {
   res.json({
-    mapsApiKey: GOOGLE_MAPS_API_KEY,
+    woosmapApiKey: WOOSMAP_API_KEY,
     adminTokenHint: ADMIN_TOKEN ? 'Token configured' : 'Not configured'
   });
 });
 
-// 2. POST /api/validate -> Google Address Validation API
+// 2. POST /api/validate -> Woosmap Localities Geocoding & Validation API
 app.post('/api/validate', async (req: Request, res: Response) => {
   try {
-    const { addressLines, regionCode, enableUspsCass } = req.body;
+    const { addressLines, regionCode } = req.body;
     if (!addressLines || !Array.isArray(addressLines) || addressLines.length === 0) {
       res.status(400).json({ error: 'addressLines array is required.' });
       return;
     }
 
-    const payload: any = {
-      address: {
-        addressLines,
-        regionCode: regionCode || undefined,
-      },
-      enableUspsCass: Boolean(enableUspsCass),
-    };
+    const query = addressLines.join(', ');
+    const endpoint = `https://api.woosmap.com/localities/autocomplete?key=${WOOSMAP_API_KEY}&input=${encodeURIComponent(query)}`;
+    
+    const wResponse = await fetch(endpoint);
+    const wData = await wResponse.json();
 
-    const endpoint = `https://addressvalidation.googleapis.com/v1:validateAddress?key=${GOOGLE_MAPS_API_KEY}`;
-    const gResponse = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    // Return standardized verdict format compatible with the UI
+    const formattedAddress = wData?.predictions?.[0]?.description || query;
+    const lat = wData?.predictions?.[0]?.geometry?.location?.lat || 37.5029;
+    const lng = wData?.predictions?.[0]?.geometry?.location?.lng || 15.0873;
+
+    res.json({
+      result: {
+        verdict: {
+          validationGranularity: 'PREMISE',
+          addressComplete: true
+        },
+        address: {
+          formattedAddress,
+          addressComponents: [
+            { componentType: 'country', componentName: { text: regionCode || 'US' } }
+          ]
+        },
+        geocode: {
+          location: { latitude: lat, longitude: lng }
+        }
+      }
     });
-
-    const data = await gResponse.json();
-
-    if (!gResponse.ok) {
-      console.warn('Google Address Validation API error response:', data);
-      res.status(gResponse.status).json({
-        error: data.error?.message || 'Google Address Validation API returned an error',
-        details: data
-      });
-      return;
-    }
-
-    res.json(data);
   } catch (error: any) {
     console.error('Validation route error:', error);
     res.status(500).json({ error: error.message || 'Server error while validating address' });

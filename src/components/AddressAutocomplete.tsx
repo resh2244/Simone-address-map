@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Search, MapPin, X } from 'lucide-react';
 
 interface AddressAutocompleteProps {
@@ -18,123 +18,64 @@ interface AddressAutocompleteProps {
 export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
   apiKey,
   onAddressSelect,
-  placeholder = 'Start typing address (e.g. 1600 Amphitheatre Pkwy, Mountain View)...',
+  placeholder = 'Type address (e.g. 1600 Amphitheatre Pkwy)...',
   value: controlledValue,
   onChange: controlledOnChange
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<any>(null);
   const [internalValue, setInternalValue] = useState(controlledValue || '');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const val = controlledValue !== undefined ? controlledValue : internalValue;
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
-    if (controlledOnChange) {
-      controlledOnChange(v);
+    if (controlledOnChange) controlledOnChange(v);
+    else setInternalValue(v);
+
+    if (v.trim().length > 2 && apiKey) {
+      setLoading(true);
+      try {
+        const res = await fetch(`https://api.woosmap.com/localities/autocomplete?key=${apiKey}&input=${encodeURIComponent(v)}`);
+        const data = await res.json();
+        if (data && data.predictions) {
+          setSuggestions(data.predictions);
+        }
+      } catch (err) {
+        console.warn('Woosmap autocomplete error:', err);
+      } finally {
+        setLoading(false);
+      }
     } else {
-      setInternalValue(v);
+      setSuggestions([]);
     }
   };
 
-  useEffect(() => {
-    if (!apiKey) return;
+  const handleSelectPrediction = (prediction: any) => {
+    const formatted = prediction.description || prediction.formatted_address || val;
+    if (controlledOnChange) controlledOnChange(formatted);
+    else setInternalValue(formatted);
+    setSuggestions([]);
 
-    function initAutocomplete() {
-      if (!inputRef.current || !window.google?.maps?.places) return;
-
-      // Autocomplete setup
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
-        fields: ['address_components', 'formatted_address', 'geometry', 'name'],
-        types: ['address']
-      });
-
-      autocompleteRef.current.addListener('place_changed', () => {
-        const place = autocompleteRef.current.getPlace();
-        if (!place || !place.formatted_address) return;
-
-        let regionCode = '';
-        let streetNumber = '';
-        let route = '';
-        let city = '';
-        let postalCode = '';
-
-        if (place.address_components) {
-          for (const comp of place.address_components) {
-            if (comp.types.includes('country')) {
-              regionCode = comp.short_name;
-            }
-            if (comp.types.includes('street_number')) {
-              streetNumber = comp.long_name;
-            }
-            if (comp.types.includes('route')) {
-              route = comp.long_name;
-            }
-            if (comp.types.includes('locality')) {
-              city = comp.long_name;
-            }
-            if (comp.types.includes('postal_code')) {
-              postalCode = comp.long_name;
-            }
-          }
-        }
-
-        const line1 = streetNumber && route ? `${streetNumber} ${route}` : (place.name || '');
-        const line2 = [postalCode, city].filter(Boolean).join(' ');
-
-        const addressLines = [line1, line2].filter(Boolean);
-        if (addressLines.length === 0) {
-          addressLines.push(place.formatted_address);
-        }
-
-        const lat = place.geometry?.location ? place.geometry.location.lat() : undefined;
-        const lng = place.geometry?.location ? place.geometry.location.lng() : undefined;
-
-        if (controlledOnChange) {
-          controlledOnChange(place.formatted_address);
-        } else {
-          setInternalValue(place.formatted_address);
-        }
-
-        onAddressSelect({
-          formattedAddress: place.formatted_address,
-          addressLines,
-          regionCode,
-          lat,
-          lng
-        });
-      });
-    }
-
-    if (!window.google) {
-      const existingScript = document.getElementById('google-maps-script');
-      if (!existingScript) {
-        const script = document.createElement('script');
-        script.id = 'google-maps-script';
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
-        script.async = true;
-        script.defer = true;
-        script.onload = initAutocomplete;
-        document.head.appendChild(script);
-      } else {
-        existingScript.addEventListener('load', initAutocomplete);
-      }
-    } else {
-      initAutocomplete();
-    }
-  }, [apiKey]);
+    onAddressSelect({
+      formattedAddress: formatted,
+      addressLines: [formatted],
+      regionCode: prediction.country_code || 'US',
+      lat: prediction.geometry?.location?.lat || 37.422,
+      lng: prediction.geometry?.location?.lng || -122.084
+    });
+  };
 
   return (
     <div className="relative w-full">
       <div className="relative">
-        <MapPin className="w-4 h-4 absolute left-3.5 top-3 text-blue-500 pointer-events-none" />
+        <MapPin className="w-4 h-4 absolute left-3.5 top-3 text-amber-500 pointer-events-none" />
         <input
-          ref={inputRef}
           type="text"
           value={val}
           onChange={handleInputChange}
           placeholder={placeholder}
-          className="w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+          className="w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-xs"
         />
         {val && (
           <button
@@ -142,6 +83,7 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
             onClick={() => {
               if (controlledOnChange) controlledOnChange('');
               else setInternalValue('');
+              setSuggestions([]);
             }}
             className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           >
@@ -149,9 +91,22 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
           </button>
         )}
       </div>
-      <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500 flex items-center space-x-1 pl-1">
-        <span>⚡ Google Places Autocomplete: suggestions update as you type</span>
-      </p>
+
+      {suggestions.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+          {suggestions.map((item, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleSelectPrediction(item)}
+              className="w-full text-left px-4 py-2.5 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-800 flex items-center space-x-2"
+            >
+              <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span className="truncate">{item.description || item.formatted_address}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

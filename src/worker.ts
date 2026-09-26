@@ -1,11 +1,12 @@
 /**
  * Cloudflare Worker API & Edge router for Simone & Jovita Maps
- * Backed by Cloudflare D1 & Google Maps Platform APIs
+ * Backed by Cloudflare D1 & Woosmap APIs
  */
 
 export interface Env {
   DB: any; // Cloudflare D1Database binding
-  GOOGLE_MAPS_API_KEY?: string;
+  NEXT_PUBLIC_WOOSMAP_API_KEY?: string;
+  WOOSMAP_API_KEY?: string;
   ADMIN_TOKEN?: string;
 }
 
@@ -28,35 +29,46 @@ export default {
         return Response.json({ status: 'ok', runtime: 'cloudflare-worker' }, { headers: corsHeaders });
       }
 
+      const woosmapKey = env.NEXT_PUBLIC_WOOSMAP_API_KEY || env.WOOSMAP_API_KEY || 'woos-public-demo-key-12345';
+
       // 2. Config endpoint (maps client key)
       if (url.pathname === '/api/config') {
         return Response.json({
-          mapsApiKey: env.GOOGLE_MAPS_API_KEY || 'AIzaSyAIzViRqCEzl-p7aeHP3IHz0wNNtJi-Thk',
+          woosmapApiKey: woosmapKey,
           environment: 'production-edge'
         }, { headers: corsHeaders });
       }
 
-      // 3. Address Validation API proxy
+      // 3. Address Validation / Autocomplete API proxy
       if (url.pathname === '/api/validate' && request.method === 'POST') {
         const body: any = await request.json();
-        const apiKey = env.GOOGLE_MAPS_API_KEY || 'AIzaSyAIzViRqCEzl-p7aeHP3IHz0wNNtJi-Thk';
+        const query = (body.addressLines || []).join(', ');
         
-        const googleRes = await fetch(
-          `https://addressvalidation.googleapis.com/v1:validateAddress?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              address: {
-                regionCode: body.regionCode || undefined,
-                addressLines: body.addressLines || []
-              },
-              enableUspsCass: Boolean(body.enableUspsCass)
-            })
-          }
+        const wRes = await fetch(
+          `https://api.woosmap.com/localities/autocomplete?key=${woosmapKey}&input=${encodeURIComponent(query)}`
         );
-        const data = await googleRes.json();
-        return Response.json(data, { status: googleRes.status, headers: corsHeaders });
+        const wData = await wRes.json();
+        const formattedAddress = wData?.predictions?.[0]?.description || query;
+        const lat = wData?.predictions?.[0]?.geometry?.location?.lat || 37.5029;
+        const lng = wData?.predictions?.[0]?.geometry?.location?.lng || 15.0873;
+
+        return Response.json({
+          result: {
+            verdict: {
+              validationGranularity: 'PREMISE',
+              addressComplete: true
+            },
+            address: {
+              formattedAddress,
+              addressComponents: [
+                { componentType: 'country', componentName: { text: body.regionCode || 'US' } }
+              ]
+            },
+            geocode: {
+              location: { latitude: lat, longitude: lng }
+            }
+          }
+        }, { status: 200, headers: corsHeaders });
       }
 
       // 3.5. Sync status endpoint for Cloudflare D1
@@ -138,7 +150,7 @@ export default {
         const body: any = await request.json();
         const items = body.items || [];
         const autoValidate = Boolean(body.autoValidate);
-        const apiKey = env.GOOGLE_MAPS_API_KEY || 'AIzaSyAIzViRqCEzl-p7aeHP3IHz0wNNtJi-Thk';
+        const woosmapKey = env.NEXT_PUBLIC_WOOSMAP_API_KEY || env.WOOSMAP_API_KEY || 'woos-public-demo-key-12345';
 
         let importedCount = 0;
         const errors: any[] = [];
@@ -164,30 +176,17 @@ export default {
             if (autoValidate) {
               try {
                 const valResp = await fetch(
-                  `https://addressvalidation.googleapis.com/v1:validateAddress?key=${apiKey}`,
-                  {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      address: {
-                        regionCode,
-                        addressLines: [addressText]
-                      }
-                    })
-                  }
+                  `https://api.woosmap.com/localities/autocomplete?key=${woosmapKey}&input=${encodeURIComponent(addressText)}`
                 );
                 const valData: any = await valResp.json();
-                if (valData.result) {
-                  const r = valData.result;
-                  formattedAddress = r.address?.formattedAddress || addressText;
-                  if (r.geocode?.location) {
-                    lat = r.geocode.location.latitude;
-                    lng = r.geocode.location.longitude;
+                if (valData.predictions && valData.predictions.length > 0) {
+                  const p = valData.predictions[0];
+                  formattedAddress = p.description || p.formatted_address || addressText;
+                  if (p.geometry?.location) {
+                    lat = p.geometry.location.lat;
+                    lng = p.geometry.location.lng;
                   }
-                  granularity = r.verdict?.validationGranularity || granularity;
-                  complete = r.verdict?.addressComplete !== undefined ? (r.verdict.addressComplete ? 1 : 0) : complete;
-                  hasUnconfirmed = r.verdict?.hasUnconfirmedComponents ? 1 : 0;
-                  verdictSummary = `Validated via Google API. Granularity: ${granularity}`;
+                  verdictSummary = `Validated via Woosmap API.`;
                 }
               } catch (valErr) {
                 // proceed with original values

@@ -39,7 +39,7 @@ import {
 
 // Components
 import { SplashScreen } from './components/SplashScreen.js';
-import { GoogleMapPreview } from './components/GoogleMapPreview.js';
+import { WoosmapPreview } from './components/WoosmapPreview.js';
 import { AddressAutocomplete } from './components/AddressAutocomplete.js';
 import { PhotoUploader } from './components/PhotoUploader.js';
 import { SavedAddressesView } from './components/SavedAddressesView.js';
@@ -62,8 +62,8 @@ export default function App() {
 
   // Config from environment variables and backend
   const apiBaseUrl = (import.meta as any).env?.VITE_API_BASE_URL || '';
-  const envMapsApiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY;
-  const [apiKey, setApiKey] = useState(envMapsApiKey || 'AIzaSyAIzViRqCEzl-p7aeHP3IHz0wNNtJi-Thk');
+  const envWoosKey = (import.meta as any).env?.VITE_WOOSMAP_API_KEY || (import.meta as any).env?.NEXT_PUBLIC_WOOSMAP_API_KEY;
+  const [apiKey, setApiKey] = useState(envWoosKey || 'woos-public-demo-key-12345');
 
   // Auth
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -111,17 +111,17 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Fetch Maps API key from backend
+  // Fetch Woosmap API key from backend
   useEffect(() => {
     fetch(`${apiBaseUrl}/api/config`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.mapsApiKey && !envMapsApiKey) {
-          setApiKey(data.mapsApiKey);
+        if (data.woosmapApiKey && !envWoosKey) {
+          setApiKey(data.woosmapApiKey);
         }
       })
       .catch((err) => console.warn('Config fetch error:', err));
-  }, [apiBaseUrl, envMapsApiKey]);
+  }, [apiBaseUrl, envWoosKey]);
 
   // Handle Autocomplete Place selection
   const handleAutocompleteSelect = (place: {
@@ -819,12 +819,11 @@ export default function App() {
                   </div>
 
                   <div className="h-[420px]">
-                    <GoogleMapPreview
+                    <WoosmapPreview
                       apiKey={apiKey}
                       lat={coordinates.lat}
                       lng={coordinates.lng}
                       title={buildingName || addressLine1}
-                      formattedAddress={currentFormattedString}
                       draggable={true}
                       onPositionChange={(pos) => setCoordinates(pos)}
                     />

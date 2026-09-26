@@ -169,6 +169,35 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
     downloadAnchor.remove();
   };
 
+  const handleExportExcel = () => {
+    if (addresses.length === 0) {
+      alert('No saved addresses available to export.');
+      return;
+    }
+    const headers = ['ID', 'Building Name', 'Formatted Address', 'Region Code', 'Latitude', 'Longitude', 'Granularity', 'Complete', 'Notes', 'Created At'];
+    const rows = addresses.map(item => [
+      item.id,
+      `"${(item.name || '').replace(/"/g, '""')}"`,
+      `"${(item.formattedAddress || '').replace(/"/g, '""')}"`,
+      item.regionCode || 'US',
+      item.lat,
+      item.lng,
+      item.granularity || 'PREMISE',
+      item.complete ? 'Yes' : 'No',
+      `"${(item.notes || '').replace(/"/g, '""')}"`,
+      new Date(item.createdAt).toISOString()
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `simone_jovita_addresses_excel_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   const filtered = addresses.filter((item) => {
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -187,7 +216,7 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6 animate-in fade-in">
+    <div id="saved-addresses-list-container" className="max-w-7xl mx-auto px-4 py-8 space-y-6 animate-in fade-in">
       {/* Environment Sync Status Indicator */}
       <EnvironmentSyncStatus firestoreCount={addresses.length} />
 
@@ -208,6 +237,16 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Export to Excel Button at top of container */}
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="py-2 px-3.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 font-bold text-xs border border-emerald-500/30 transition-all flex items-center space-x-1.5 shadow-xs"
+            title="Export all saved addresses as Excel-compatible CSV file"
+          >
+            <FileDown className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Export to Excel</span>
+          </button>
           {/* Search Bar */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />

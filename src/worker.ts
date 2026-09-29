@@ -3,6 +3,9 @@
  * Static Vite assets are served through the ASSETS binding.
  */
 
+type D1Database = any;
+type Fetcher = { fetch: (request: Request | string, init?: any) => Promise<Response> };
+
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;

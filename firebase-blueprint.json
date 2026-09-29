@@ -45,6 +45,10 @@
           "type": "string",
           "description": "Human-readable verdict description"
         },
+        "listingType": {
+          "type": "string",
+          "description": "Type of listing: public or private"
+        },
         "notes": {
           "type": "string",
           "description": "User custom notes or tags"

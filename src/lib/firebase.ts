@@ -73,10 +73,31 @@ export async function logOut(): Promise<void> {
 }
 
 // Data models
+export interface PublicListingDetails {
+  placeName: string;
+  category: string;
+  phoneNumber?: string;
+  website?: string;
+  openingHours?: string;
+  placeType?: 'business' | 'landmark' | 'residential' | 'service';
+}
+
+export interface PrivateLocationDetails {
+  buildingName: string;
+  occupantName?: string;
+  accessCode?: string;
+  intercom?: string;
+  confidentialNotes?: string;
+  privateDirections?: string;
+}
+
 export interface AddressRegistration {
   id: string;
   name?: string; // Place name / Building name / Business name
   category?: string; // Residential, Commercial, Landmark, etc.
+  listingType?: 'public' | 'private'; // Public Listing vs Private Location
+  publicDetails?: PublicListingDetails;
+  privateDetails?: PrivateLocationDetails;
   formattedAddress: string;
   addressLines: string[];
   regionCode: string;
@@ -94,7 +115,8 @@ export interface AddressRegistration {
     fullAddress: string;
     coordinates: { lat: number; lng: number };
     officialGoogleMapsContributeUrl: string;
-    status: 'PENDING_GOOGLE_REVIEW' | 'VERIFIED_LOCALLY';
+    status: 'PENDING_GOOGLE_REVIEW' | 'VERIFIED_LOCALLY' | 'PRIVATE_REGISTERED';
+    listingType?: 'public' | 'private';
   };
   meetUri?: string;
   userId: string;

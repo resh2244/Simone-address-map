@@ -27,7 +27,12 @@ import {
   ShieldCheck,
   Building,
   Menu,
-  X
+  X,
+  Globe,
+  Lock,
+  Key,
+  Phone,
+  Link as LinkIcon
 } from 'lucide-react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import {
@@ -75,6 +80,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Address Registration Form State
+  const [listingType, setListingType] = useState<'public' | 'private'>('public');
   const [buildingName, setBuildingName] = useState('Villa Bellini Residence');
   const [category, setCategory] = useState('Residential');
   const [addressLine1, setAddressLine1] = useState("Via Sant'Anna 8");
@@ -84,6 +90,16 @@ export default function App() {
   const [autocompleteInput, setAutocompleteInput] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [notes, setNotes] = useState('Main front entrance on Via Sant\'Anna with private courtyard.');
+  
+  // Public specific fields
+  const [publicPhone, setPublicPhone] = useState('+39 095 730 6111');
+  const [publicWebsite, setPublicWebsite] = useState('https://simonejovitamaps.internal');
+  const [publicPlaceType, setPublicPlaceType] = useState<'business' | 'landmark' | 'residential' | 'service'>('residential');
+
+  // Private specific fields
+  const [occupantName, setOccupantName] = useState('Dr. Simone Jovita');
+  const [gateCode, setGateCode] = useState('#8899');
+  const [intercom, setIntercom] = useState('Unit 3B');
 
   // Draggable Map coordinates
   const [coordinates, setCoordinates] = useState<{ lat: number; lng: number }>({
@@ -245,8 +261,23 @@ export default function App() {
 
       const record: AddressRegistration = {
         id: registrationId,
-        name: buildingName || 'Registered Address',
+        name: buildingName || (listingType === 'public' ? 'Public Place' : 'Private Location'),
         category,
+        listingType,
+        publicDetails: listingType === 'public' ? {
+          placeName: buildingName || 'Public Place',
+          category,
+          phoneNumber: publicPhone || undefined,
+          website: publicWebsite || undefined,
+          placeType: publicPlaceType
+        } : undefined,
+        privateDetails: listingType === 'private' ? {
+          buildingName: buildingName || 'Private Residence',
+          occupantName: occupantName || undefined,
+          accessCode: gateCode || undefined,
+          intercom: intercom || undefined,
+          confidentialNotes: notes || undefined
+        } : undefined,
         formattedAddress,
         addressLines: lines,
         regionCode: regionCode.toUpperCase(),
@@ -258,6 +289,17 @@ export default function App() {
         verdictSummary: `Granularity: ${granularity}. Validated via Google Address Validation API.`,
         notes,
         photos,
+        googleSubmissionPayload: {
+          placeName: buildingName || (listingType === 'public' ? 'Public Place' : 'Private Location'),
+          category,
+          fullAddress: formattedAddress,
+          coordinates: { lat: coordinates.lat, lng: coordinates.lng },
+          officialGoogleMapsContributeUrl: listingType === 'public'
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formattedAddress)}`
+            : `https://www.google.com/maps/dir/?api=1&destination=${coordinates.lat},${coordinates.lng}`,
+          status: listingType === 'public' ? 'PENDING_GOOGLE_REVIEW' : 'PRIVATE_REGISTERED',
+          listingType
+        },
         userId: currentUser?.uid || 'guest',
         userEmail: currentUser?.email || 'Guest User',
         userName: currentUser?.displayName || 'Guest',
@@ -273,6 +315,9 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: record.id,
+          name: record.name,
+          category: record.category,
+          listingType: record.listingType,
           formattedAddress: record.formattedAddress,
           addressLines: JSON.stringify(record.addressLines),
           regionCode: record.regionCode,
@@ -289,7 +334,11 @@ export default function App() {
         })
       });
 
-      setSaveSuccessMsg('Address successfully validated and saved to Firestore!');
+      setSaveSuccessMsg(
+        listingType === 'public'
+          ? 'Public listing validated & queued for Google Maps submission!'
+          : 'Private location validated & secured in private registry!'
+      );
 
       if (initiateWorkflow) {
         setActiveWorkflowItem(record);
@@ -637,6 +686,63 @@ export default function App() {
               {/* Form Side */}
               <div className="lg:col-span-6 space-y-6">
                 <div className="p-6 rounded-3xl bg-navy-900/90 border border-gold/30 shadow-xl space-y-5">
+                  {/* Mode Selector: Public Listing vs Private Location */}
+                  <div>
+                    <label className="block text-xs font-bold text-amber-300 mb-2">
+                      Destination Listing Type
+                    </label>
+                    <div className="p-1 rounded-2xl bg-navy-800 border border-slate-700 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setListingType('public');
+                          setCategory('Commercial');
+                        }}
+                        className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center space-x-2 transition-all ${
+                          listingType === 'public'
+                            ? 'bg-gold-gradient text-slate-950 shadow-gold'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Globe className="w-4 h-4" />
+                        <span>Public Listing</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setListingType('private');
+                          setCategory('Residential');
+                        }}
+                        className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center space-x-2 transition-all ${
+                          listingType === 'private'
+                            ? 'bg-navy-950 text-amber-300 border border-gold/40 shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Lock className="w-4 h-4" />
+                        <span>Private Location</span>
+                      </button>
+                    </div>
+
+                    <div className="mt-2 text-[11px] p-2.5 rounded-xl border border-slate-700/80 bg-navy-950/60">
+                      {listingType === 'public' ? (
+                        <div className="flex items-start space-x-2 text-amber-200">
+                          <Globe className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
+                          <span>
+                            <strong>Public Listing:</strong> Prepared for Google Maps public intake &amp; global search directory (businesses, public buildings, landmarks, store fronts).
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-start space-x-2 text-slate-300">
+                          <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
+                          <span>
+                            <strong>Private Location:</strong> Confidential property. Never published on public Google Maps search. Generates private direct-navigation deep-links &amp; courier access passes.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Google Places Autocomplete */}
                   <div>
                     <label className="block text-xs font-bold text-amber-300 mb-2">
@@ -654,13 +760,13 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        Building / Place Name
+                        {listingType === 'public' ? 'Public Place / Business Name' : 'Private Building / Residence Name'}
                       </label>
                       <input
                         type="text"
                         value={buildingName}
                         onChange={(e) => setBuildingName(e.target.value)}
-                        placeholder="e.g. Villa Bellini Residence"
+                        placeholder={listingType === 'public' ? 'e.g. Caffè Bellini' : 'e.g. Villa Sant\'Anna - Residence'}
                         className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-700 bg-navy-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
@@ -673,14 +779,107 @@ export default function App() {
                         onChange={(e) => setCategory(e.target.value)}
                         className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-700 bg-navy-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                       >
-                        <option value="Residential">Residential Building / Villa</option>
-                        <option value="Commercial">Commercial / Office</option>
-                        <option value="Industrial">Industrial / Warehouse</option>
-                        <option value="Government">Government / Institutional</option>
-                        <option value="Other">Other Premise</option>
+                        {listingType === 'public' ? (
+                          <>
+                            <option value="Commercial">Commercial / Office</option>
+                            <option value="Store">Retail / Store / Shop</option>
+                            <option value="Restaurant">Restaurant / Bar / Café</option>
+                            <option value="Residential">Residential Complex / Condominium</option>
+                            <option value="Industrial">Industrial / Logistics Depot</option>
+                            <option value="Government">Government / Public Institution</option>
+                            <option value="Landmark">Landmark / Tourist Site</option>
+                            <option value="Other">Other Public Establishment</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="Residential">Private Villa / Family House</option>
+                            <option value="Apartment">Private Apartment / Penthouse</option>
+                            <option value="Gated">Gated Community / Private Estate</option>
+                            <option value="Warehouse">Private Warehouse / Secure Depot</option>
+                            <option value="Office">Private / Unlisted Office</option>
+                            <option value="Other">Other Confidential Property</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </div>
+
+                  {/* Public specific fields */}
+                  {listingType === 'public' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-2xl bg-navy-950/60 border border-slate-800">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                          <Phone className="w-3 h-3 text-amber-400" />
+                          <span>Public Phone (Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={publicPhone}
+                          onChange={(e) => setPublicPhone(e.target.value)}
+                          placeholder="+39 095 123456"
+                          className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-700 bg-navy-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                          <LinkIcon className="w-3 h-3 text-amber-400" />
+                          <span>Website (Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={publicWebsite}
+                          onChange={(e) => setPublicWebsite(e.target.value)}
+                          placeholder="https://example.com"
+                          className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-700 bg-navy-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Private specific fields */}
+                  {listingType === 'private' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-navy-950/60 border border-slate-800">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                          <User className="w-3 h-3 text-amber-400" />
+                          <span>Occupant Name</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={occupantName}
+                          onChange={(e) => setOccupantName(e.target.value)}
+                          placeholder="Dr. Simone Jovita"
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-700 bg-navy-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                          <Key className="w-3 h-3 text-amber-400" />
+                          <span>Gate / Pin Code</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={gateCode}
+                          onChange={(e) => setGateCode(e.target.value)}
+                          placeholder="#8899"
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-700 bg-navy-800 text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                          <Building className="w-3 h-3 text-amber-400" />
+                          <span>Intercom / Apt</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={intercom}
+                          onChange={(e) => setIntercom(e.target.value)}
+                          placeholder="Unit 3B"
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-700 bg-navy-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Address lines */}
                   <div className="space-y-3 pt-2 border-t border-slate-800">
@@ -747,13 +946,17 @@ export default function App() {
                   {/* Notes / Access Instructions */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Entrance &amp; Courier Delivery Notes
+                      {listingType === 'public' ? 'Public Entrance & Visitor Instructions' : 'Confidential Courier & Delivery Access Notes'}
                     </label>
                     <textarea
                       rows={2}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="e.g. Main front entrance on Via Sant'Anna with private courtyard."
+                      placeholder={
+                        listingType === 'public'
+                          ? 'e.g. Main customer entrance on Via Sant\'Anna with wheelchair accessible ramp.'
+                          : 'e.g. Private gated courtyard. Ring intercom 3B or enter gate code #8899.'
+                      }
                       className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-700 bg-navy-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
@@ -778,14 +981,22 @@ export default function App() {
                       type="button"
                       onClick={() => handleSaveRegistration(true)}
                       disabled={saving}
-                      className="py-3 px-6 rounded-2xl bg-gold-gradient text-slate-950 font-extrabold text-xs shadow-gold hover:opacity-95 transition-all flex items-center justify-center space-x-2"
+                      className={`py-3 px-6 rounded-2xl font-extrabold text-xs shadow-gold hover:opacity-95 transition-all flex items-center justify-center space-x-2 ${
+                        listingType === 'public'
+                          ? 'bg-gold-gradient text-slate-950'
+                          : 'bg-navy-950 text-amber-300 border border-gold/50'
+                      }`}
                     >
                       {saving ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : listingType === 'public' ? (
+                        <Globe className="w-4 h-4" />
                       ) : (
-                        <Compass className="w-4 h-4" />
+                        <Lock className="w-4 h-4" />
                       )}
-                      <span>Submit to Google Maps</span>
+                      <span>
+                        {listingType === 'public' ? 'Submit to Google Maps' : 'Register Private Location'}
+                      </span>
                     </button>
                   </div>
 
@@ -952,9 +1163,13 @@ export default function App() {
                 setAddressLine1(item.addressLines[0]);
                 setAddressLine2(item.addressLines.slice(1).join(', '));
               }
+              if (item.listingType) {
+                setListingType(item.listingType);
+              }
               setCurrentTab('add-address');
             }}
             onShare={(item) => setActiveShareItem(item)}
+            onOpenWorkflow={(item) => setActiveWorkflowItem(item)}
           />
         )}
 

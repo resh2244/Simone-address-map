@@ -17,7 +17,9 @@ import {
   Eye,
   ArrowRightLeft,
   CheckSquare,
-  Square
+  Square,
+  Globe,
+  Lock
 } from 'lucide-react';
 import { AddressRegistration, getUserAddresses, deleteAddressFromFirestore, saveAddressToFirestore } from '../lib/firebase.js';
 import { generateAddressPDF } from '../lib/pdfGenerator.js';
@@ -29,18 +31,20 @@ interface SavedAddressesViewProps {
   onAddNew: () => void;
   onSelectAddress: (item: AddressRegistration) => void;
   onShare: (item: AddressRegistration) => void;
+  onOpenWorkflow?: (item: AddressRegistration) => void;
 }
 
 export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
   currentUser,
   onAddNew,
   onSelectAddress,
-  onShare
+  onShare,
+  onOpenWorkflow
 }) => {
   const [addresses, setAddresses] = useState<AddressRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'favorites' | 'pending' | 'verified'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'public' | 'private' | 'favorites' | 'pending' | 'verified'>('all');
   const [comparisonItem, setComparisonItem] = useState<AddressRegistration | null>(null);
 
   // Multi-select state
@@ -207,6 +211,10 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
     }
     if (filterStatus === 'favorites') {
       if (!favorites.includes(item.id)) return false;
+    } else if (filterStatus === 'public') {
+      if (item.listingType === 'private') return false;
+    } else if (filterStatus === 'private') {
+      if (item.listingType !== 'private') return false;
     } else if (filterStatus === 'pending') {
       if (item.googleSubmissionPayload?.status !== 'PENDING_GOOGLE_REVIEW') return false;
     } else if (filterStatus === 'verified') {
@@ -214,6 +222,9 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
     }
     return true;
   });
+
+  const publicCount = addresses.filter((a) => a.listingType !== 'private').length;
+  const privateCount = addresses.filter((a) => a.listingType === 'private').length;
 
   return (
     <div id="saved-addresses-list-container" className="max-w-7xl mx-auto px-4 py-8 space-y-6 animate-in fade-in">
@@ -260,7 +271,7 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold overflow-x-auto">
             <button
               onClick={() => setFilterStatus('all')}
               className={`px-3 py-1.5 rounded-lg transition-all ${
@@ -269,7 +280,29 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              All
+              All ({addresses.length})
+            </button>
+            <button
+              onClick={() => setFilterStatus('public')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center space-x-1 ${
+                filterStatus === 'public'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Globe className="w-3 h-3 text-blue-500" />
+              <span>Public ({publicCount})</span>
+            </button>
+            <button
+              onClick={() => setFilterStatus('private')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center space-x-1 ${
+                filterStatus === 'private'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Lock className="w-3 h-3 text-amber-500" />
+              <span>Private ({privateCount})</span>
             </button>
             <button
               onClick={() => setFilterStatus('favorites')}
@@ -451,19 +484,36 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
                   </button>
 
                   {/* Status chip */}
-                  <div className="absolute top-3 right-3">
-                    {item.googleSubmissionPayload?.status === 'PENDING_GOOGLE_REVIEW' ? (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/90 text-slate-950 backdrop-blur-xs flex items-center space-x-1 shadow-xs">
-                        <Clock className="w-3 h-3" />
-                        <span>Pending Google Review</span>
-                      </span>
-                    ) : item.complete ? (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-600/90 text-white backdrop-blur-xs flex items-center space-x-1 shadow-xs">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>Validated (Local)</span>
+                  <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
+                    {item.listingType === 'private' ? (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-navy-900/90 text-amber-300 border border-gold/40 backdrop-blur-xs flex items-center space-x-1 shadow-xs">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>Private</span>
                       </span>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800/90 text-slate-200">
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-600/90 text-white backdrop-blur-xs flex items-center space-x-1 shadow-xs">
+                        <Globe className="w-2.5 h-2.5" />
+                        <span>Public</span>
+                      </span>
+                    )}
+
+                    {item.googleSubmissionPayload?.status === 'PENDING_GOOGLE_REVIEW' ? (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/90 text-slate-950 backdrop-blur-xs flex items-center space-x-1 shadow-xs">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>Pending Review</span>
+                      </span>
+                    ) : item.googleSubmissionPayload?.status === 'PRIVATE_REGISTERED' ? (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-700/90 text-white backdrop-blur-xs flex items-center space-x-1 shadow-xs">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        <span>Secured</span>
+                      </span>
+                    ) : item.complete ? (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-600/90 text-white backdrop-blur-xs flex items-center space-x-1 shadow-xs">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        <span>Validated</span>
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800/90 text-slate-200">
                         Draft
                       </span>
                     )}
@@ -506,30 +556,65 @@ export const SavedAddressesView: React.FC<SavedAddressesViewProps> = ({
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectAddress(item);
-                      }}
-                      className="py-1.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors flex items-center space-x-1"
-                    >
-                      <Compass className="w-3.5 h-3.5 text-blue-500" />
-                      <span>View Map</span>
-                    </button>
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5 flex-wrap">
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectAddress(item);
+                        }}
+                        className="py-1.5 px-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors flex items-center space-x-1"
+                      >
+                        <Compass className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Map</span>
+                      </button>
 
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      title="Open in Google Maps"
-                      className="p-2 rounded-xl text-slate-500 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+                      {onOpenWorkflow && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenWorkflow(item);
+                          }}
+                          className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 shadow-xs ${
+                            item.listingType === 'private'
+                              ? 'bg-navy-800 hover:bg-navy-700 text-amber-300 border border-gold/40'
+                              : 'bg-gold-gradient text-slate-950 shadow-gold'
+                          }`}
+                          title={
+                            item.listingType === 'private'
+                              ? 'Open Private Navigation Link & Security Pass'
+                              : 'Submit or Review Google Maps Intake'
+                          }
+                        >
+                          {item.listingType === 'private' ? (
+                            <>
+                              <Lock className="w-3.5 h-3.5" />
+                              <span>Private Pass</span>
+                            </>
+                          ) : (
+                            <>
+                              <Globe className="w-3.5 h-3.5" />
+                              <span>Google Intake</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
 
                     <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
+                      <a
+                        href={
+                          item.listingType === 'private'
+                            ? `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}`
+                            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.formattedAddress)}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        title={item.listingType === 'private' ? 'Navigate on Google Maps' : 'Open in Google Maps'}
+                        className="p-1.5 rounded-xl text-slate-500 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
                       <button
                         onClick={() => onShare(item)}
                         title="Share & QR Code"

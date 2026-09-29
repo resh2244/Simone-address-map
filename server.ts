@@ -1,16 +1,17 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import http from 'http';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { GoogleGenAI, type LiveServerMessage, Modality } from '@google/genai';
 import { ai } from './server/gemini.ts';
 import {
   insertSubmission,
   getAllSubmissions,
   deleteSubmissionById,
-  StoredSubmission
+  type StoredSubmission
 } from './server/sqlite.ts';
 
 dotenv.config();
@@ -489,14 +490,14 @@ server.on('upgrade', (request, socket, head) => {
 
 // Setup Vite middleware in dev or static files in production
 async function bootstrap() {
-  const isProd = process.env.NODE_ENV === 'production' || !process.env.VITE_DEV_SERVER;
+  const isProd = process.env.NODE_ENV === 'production';
   const distPath = path.resolve(process.cwd(), 'dist');
+  const indexPath = path.join(distPath, 'index.html');
 
-  // If in production or dist exists and Vite is not explicitly requested, serve static dist
-  if (isProd) {
+  if (isProd && fs.existsSync(indexPath)) {
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      res.sendFile(indexPath);
     });
   } else {
     try {
@@ -507,10 +508,16 @@ async function bootstrap() {
       app.use(vite.middlewares);
     } catch (e) {
       console.warn('Vite middleware could not be loaded, falling back to static dist:', e);
-      app.use(express.static(distPath));
-      app.get('*', (_req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
-      });
+      if (fs.existsSync(indexPath)) {
+        app.use(express.static(distPath));
+        app.get('*', (_req, res) => {
+          res.sendFile(indexPath);
+        });
+      } else {
+        app.get('*', (_req, res) => {
+          res.status(500).send('Application is initializing, please refresh in a moment.');
+        });
+      }
     }
   }
 

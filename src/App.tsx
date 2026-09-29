@@ -63,7 +63,7 @@ export default function App() {
   // Config from environment variables and backend
   const apiBaseUrl = (import.meta as any).env?.VITE_API_BASE_URL || '';
   const envWoosKey = (import.meta as any).env?.VITE_WOOSMAP_API_KEY || (import.meta as any).env?.NEXT_PUBLIC_WOOSMAP_API_KEY;
-  const [apiKey, setApiKey] = useState(envWoosKey || 'woos-public-demo-key-12345');
+  const [apiKey, setApiKey] = useState(envWoosKey || 'AIzaSyDiSd9A2FaFDYNkhhAySoFvLGcvPUNAgFU');
 
   // Auth
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);

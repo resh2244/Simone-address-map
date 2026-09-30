@@ -111,6 +111,25 @@ export default {
         );
       }
 
+      if (url.pathname === '/api/external-user' && request.method === 'GET') {
+        const apiKey = request.headers.get('x-api-key') || url.searchParams.get('api_key') || '';
+        const headers: Record<string, string> = {
+          'Accept': 'application/json',
+        };
+        if (apiKey) {
+          headers['x-api-key'] = apiKey;
+        }
+        try {
+          const extRes = await fetch('https://api.apiverve.com/v1/mockserver/8570b3b99506aa1b/API/user', {
+            headers,
+          });
+          const extData: any = await extRes.json();
+          return Response.json(extData, { status: extRes.status, headers: corsHeaders });
+        } catch (e: any) {
+          return Response.json({ error: e.message || 'Failed to fetch external user' }, { status: 500, headers: corsHeaders });
+        }
+      }
+
       if (url.pathname === '/api/sync-status' && request.method === 'GET') {
         try {
           const resRow: any = await env.DB

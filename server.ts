@@ -287,6 +287,27 @@ app.post('/api/meet/spaces', async (req: Request, res: Response) => {
   }
 });
 
+// Proxy endpoint for APIVerve user mock server
+app.get('/api/external-user', async (req: Request, res: Response) => {
+  try {
+    const apiKey = req.headers['x-api-key'] || req.query.api_key || process.env.APIVERVE_API_KEY || '';
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    if (apiKey) {
+      headers['x-api-key'] = String(apiKey);
+    }
+    const response = await fetch('https://api.apiverve.com/v1/mockserver/8570b3b99506aa1b/API/user', {
+      headers
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err: any) {
+    console.error('External user API error:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch external user' });
+  }
+});
+
 // 7. POST /api/ai/analyze-address -> Gemini intelligence on address
 app.post('/api/ai/analyze-address', async (req: Request, res: Response) => {
   try {

@@ -1,199 +1,160 @@
 # Ace’s Address Changer 🏠📍🚀
 
-> A live address and property mapping platform for publishing, updating, and viewing locations and house structures on an interactive map.
+> A polished location workspace for publishing, editing, sharing and attaching house structures to map records.
 
-**App Name:** Ace’s Address Changer  
-**Type:** Live Address & Property Mapping Platform  
-**Status:** Active Development  
-**Map Provider:** Google Maps  
-**Focus:** Live locations, property structures, address management, and real-time updates
+**Status:** MVP built · **Frontend:** React + Vite + TypeScript · **Map:** Google Maps (optional API key) · **Storage:** local browser persistence in MVP
 
----
+## ✨ Built now
 
-## ✨ What Ace’s Address Changer Does
+- 📍 Create, edit, publish and unpublish location records
+- 🗺️ Google Maps integration when `VITE_GOOGLE_MAPS_API_KEY` is configured
+- 🔎 Search saved locations
+- 🧭 Browser geolocation / “Locate me” control
+- 🏠 House structures with bedrooms, bathrooms, floors and property type
+- 🧊 Public `.glb` URL support through `<model-viewer>` for 3D previews
+- 🔗 Shareable location links
+- 📤 JSON export and import for moving data between devices during the MVP stage
+- 🔄 Cross-tab synchronization through browser storage events
+- 👁️ Public/private visibility and draft/published status
+- 📱 Responsive mobile, tablet and desktop UI
+- ♿ Clear controls, keyboard-friendly forms and readable contrast
 
-Ace’s Address Changer is designed to let authorized users publish a location on a map and keep its address and property information up to date.
+> **Important:** “Change address” means changing a location record owned by this app. It does **not** alter an official postal, municipal, or Google Maps address.
 
-### Core capabilities
-
-- 📍 **Publish locations** – Add an address and place it on the interactive map
-- 🔄 **Change locations live** – Authorized users can update coordinates and location information
-- 🏠 **Add house structures** – Attach property details, photos, and 3D house models
-- 🧊 **3D property models** – Support house/building `.glb` structures for interactive viewing
-- 🗺️ **Interactive map** – Search, view, and explore published locations
-- ✏️ **Property editing** – Update names, addresses, descriptions, coordinates, and property details
-- 🔐 **User permissions** – Control who can publish or edit locations
-- 📸 **Property photos** – Add images to help identify a property or structure
-- 🔎 **Address search** – Search addresses and refine the exact map position
-- 📱 **Responsive design** – Designed for phones, tablets, and desktop
-- ⚡ **Live synchronization** – Changes can be reflected across connected clients
-
----
-
-## 🏡 Example Property
-
-A published property can contain:
+## 🧭 Product concept
 
 ```text
-Ace’s Address Changer
-│
-├── Property Name
-├── Address
-├── Latitude / Longitude
-├── Property Description
-├── Photos
-├── House Structure
-│   └── house.glb
-├── Property Type
-├── Bedrooms / Bathrooms
-├── Publication Status
-└── Last Updated
+Create account
+     ↓
+Search / add a location
+     ↓
+Set exact coordinates
+     ↓
+Add property details
+     ↓
+Attach photos + 3D house model
+     ↓
+Publish
+     ↓
+Share / view
+     ↓
+Authorized edit + audit history
 ```
 
-Users can select a property marker to open its property panel and view the available information and house structure.
+## 🔐 Production architecture
 
----
+The current MVP deliberately works without a backend so the interface can be tested immediately. The next production layer should move persistence and permissions to the server:
 
-## 🗺️ Live Location Workflow
-
-```text
-Create Account
-      ↓
-Add Address / Search Location
-      ↓
-Place or Adjust Map Marker
-      ↓
-Add Property Information
-      ↓
-Upload Photos / 3D House Structure
-      ↓
-Publish Location
-      ↓
-Location Appears on the Map
-      ↓
-Authorized User Can Update It
-      ↓
-Changes Synchronize for Viewers
-```
-
----
-
-## 🛠️ Planned Technology Stack
-
-| Technology | Purpose |
+| Layer | Recommended role |
 |---|---|
-| **React / Vite** | Web application interface |
-| **TypeScript** | Type-safe application code |
-| **Google Maps** | Interactive maps and location search |
-| **Cloudflare Workers** | API and serverless backend |
-| **Cloudflare D1** | Property and location database |
-| **Cloudflare R2** | Photos and 3D model storage |
-| **Cloud Firestore** | Optional real-time synchronization |
-| **Three.js / WebGL** | Interactive 3D house viewing |
+| React + Vite + TypeScript | Web application |
+| Google Maps | Maps, Places and geocoding |
+| Cloudflare Workers | API and authorization boundary |
+| Cloudflare D1 | Locations, properties, users and audit records |
+| Cloudflare R2 | Property photos and `.glb` files |
+| Durable Objects / WebSockets | True multi-user live updates |
+| Firebase Auth or another identity provider | Sign-in and account management |
+| Model Viewer / Three.js | 3D house presentation |
 
----
+## 🛡️ Security model to add before public production
 
-## 🔐 Publishing & Permissions
+- Owner / Editor / Viewer / Admin roles
+- Server-side authorization for every create, update and delete operation
+- Private locations never returned to unauthorized clients
+- Signed R2 upload URLs for photos and GLB files
+- Audit log recording **who changed what and when**
+- Rate limiting and abuse protection
+- Input validation and coordinate sanity checks
+- No API secrets committed to GitHub
+- Moderation workflow for public locations
+- Soft delete + recovery instead of immediate destructive deletion
 
-Only authorized users should be able to create or modify published locations. The application should support roles such as:
+## 💡 Ideas added to the roadmap
 
-- **Owner** – Manage their own properties
-- **Editor** – Update authorized properties
-- **Viewer** – View published locations
-- **Administrator** – Manage the platform and published data
+### Property intelligence
+- 📸 Multiple property photos with cover image
+- 🏷️ Tags such as home, office, landmark, rental or venue
+- 🛏️ Amenities and room information
+- 📐 Lot size, building size and floor plans
+- 🧊 Multiple 3D models for exterior/interior structures
+- 📅 Last verified date and verification status
 
-This prevents unauthorized users from moving or modifying someone else's property.
+### Location control
+- 📌 Drag-to-adjust coordinates
+- 🧭 GPS accuracy indicator
+- 🗺️ Map/list split view
+- 📍 Nearby-location discovery
+- 🧱 Geofences for properties or venues
+- 🕘 Location history with restore points
 
----
+### Sharing
+- 🔗 Public property pages
+- 📱 QR codes for each location
+- 🖨️ Printable property/location cards
+- 👥 Share with specific editors
+- 🔒 Expiring private links
 
-## 🚀 Development Goals
+### Trust & moderation
+- ✅ Verified-location badge
+- 🧾 Change history
+- 🚩 Report incorrect location
+- 🛡️ Admin review queue
+- 🔍 Duplicate-location detection
+- 📊 Basic usage analytics
 
-### Phase 1 — Map foundation
-- Interactive map
-- Address search
-- Location markers
-- Coordinate editing
-
-### Phase 2 — Property publishing
-- Property creation
-- Address management
-- Photos
-- Property profiles
-
-### Phase 3 — House structures
-- `.glb` model upload
-- 3D house viewer
-- Property-to-model association
-- Interactive model controls
-
-### Phase 4 — Live updates
-- Real-time location updates
-- Property status changes
-- Live synchronization
-- Update history
-
-### Phase 5 — Production platform
-- Authentication
-- Role-based permissions
-- Admin dashboard
-- Security rules
-- Monitoring and backups
-
----
-
-## 📁 Suggested Project Structure
+## 🗂️ Suggested data model
 
 ```text
-Ace-address-changer/
-├── src/
-│   ├── components/
-│   │   ├── Map.tsx
-│   │   ├── PropertyMarker.tsx
-│   │   ├── PropertyPanel.tsx
-│   │   └── HouseViewer.tsx
-│   ├── pages/
-│   │   ├── Home.tsx
-│   │   ├── Dashboard.tsx
-│   │   ├── Property.tsx
-│   │   └── Login.tsx
-│   ├── api/
-│   │   ├── locations/
-│   │   ├── properties/
-│   │   └── users/
-│   └── styles/
-│
-├── public/
-│   ├── images/
-│   └── models/
-│       └── example-house.glb
-│
-├── migrations/
-│   └── schema.sql
-│
-├── .github/
-│   └── workflows/
-├── README.md
-├── package.json
-└── wrangler.toml
+users
+  id, email, display_name, role, created_at
+
+locations
+  id, owner_id, name, address, lat, lng, visibility,
+  status, description, created_at, updated_at
+
+properties
+  id, location_id, property_type, bedrooms, bathrooms,
+  floors, building_area, lot_area
+
+assets
+  id, property_id, type, storage_key, public_url,
+  mime_type, created_at
+
+location_history
+  id, location_id, actor_id, action, before_json,
+  after_json, created_at
+
+location_members
+  location_id, user_id, role
 ```
 
----
+## 🧪 MVP setup
+
+1. Clone the repository.
+2. Install dependencies with your preferred package manager.
+3. Start Vite with `npm run dev`.
+4. Add a Google Maps browser key as `VITE_GOOGLE_MAPS_API_KEY` when you want the real map.
+5. Use **Publish** to create a location and **Edit** to change it.
+6. Add a public `.glb` URL to preview a 3D house.
+
+Never put private server credentials in `VITE_*` variables. Browser-exposed variables are public by design.
+
+## 🚀 Recommended next build stages
+
+**Stage 1 — Real persistence:** Cloudflare D1 API + migrations.  
+**Stage 2 — Accounts:** sign-in plus owner/editor/viewer permissions.  
+**Stage 3 — Media:** R2 photo and GLB uploads.  
+**Stage 4 — True live mode:** Durable Objects/WebSockets and presence.  
+**Stage 5 — Trust:** audit history, verification, moderation and reports.  
+**Stage 6 — Public discovery:** SEO-friendly property pages, QR codes and sharing.
 
 ## 🤝 Contributing
 
-Ideas, improvements, bug reports, and pull requests are welcome as the project develops.
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test the application
-5. Open a Pull Request
-
----
+Ideas, improvements, bug reports and pull requests are welcome. Please keep secrets out of commits and include tests or clear reproduction steps for behavior changes.
 
 ## 📄 License
 
-License information will be added as the project is prepared for public release.
+License information should be selected before the first public production release.
 
 ---
 

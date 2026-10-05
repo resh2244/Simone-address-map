@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import {
   Building2, ChevronRight, CircleHelp, Download, Edit3, Eye, EyeOff, Home, Layers3,
   LocateFixed, MapPin, Menu, Plus, QrCode, Search, Settings2, Share2, Trash2, Upload,
@@ -28,265 +29,43 @@ type LocationRecord = {
 
 const STORAGE_KEY = 'aces-address-changer.locations.v1';
 const DEFAULT_LOCATION: LocationRecord = {
-  id: 'demo-home',
-  name: "Ace's Demo Home",
-  address: 'Dallas, Texas, United States',
-  lat: 32.7767,
-  lng: -96.7970,
+  id: 'demo-home', name: "Ace's Demo Home", address: 'Dallas, Texas, United States', lat: 32.7767, lng: -96.7970,
   description: 'A sample property showing how Ace’s Address Changer can publish a location and attach a house structure.',
-  status: 'published',
-  visibility: 'public',
-  updatedAt: new Date().toISOString(),
+  status: 'published', visibility: 'public', updatedAt: new Date().toISOString(),
   house: { bedrooms: 3, bathrooms: 2, floors: 1, propertyType: 'Detached house', modelUrl: '' },
 };
+const emptyForm = { name:'', address:'', lat:'', lng:'', description:'', status:'published' as const, visibility:'public' as const, bedrooms:'3', bathrooms:'2', floors:'1', propertyType:'Detached house', modelUrl:'' };
+function readLocations(): LocationRecord[]{try{const raw=localStorage.getItem(STORAGE_KEY);return raw?JSON.parse(raw):[DEFAULT_LOCATION]}catch{return[DEFAULT_LOCATION]}}
 
-const emptyForm = {
-  name: '', address: '', lat: '', lng: '', description: '', status: 'published' as const,
-  visibility: 'public' as const, bedrooms: '3', bathrooms: '2', floors: '1',
-  propertyType: 'Detached house', modelUrl: '',
-};
-
-function readLocations(): LocationRecord[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [DEFAULT_LOCATION];
-  } catch { return [DEFAULT_LOCATION]; }
-}
-
-export default function App() {
-  const [locations, setLocations] = useState<LocationRecord[]>(readLocations);
-  const [selectedId, setSelectedId] = useState<string>(locations[0]?.id ?? '');
-  const [query, setQuery] = useState('');
-  const [showEditor, setShowEditor] = useState(false);
-  const [showMobileNav, setShowMobileNav] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [toast, setToast] = useState('');
-  const mapRef = useRef<HTMLDivElement>(null);
-  const googleMapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-
-  const selected = locations.find((item) => item.id === selectedId) ?? locations[0];
-  const filtered = useMemo(() => locations.filter((item) =>
-    `${item.name} ${item.address} ${item.description}`.toLowerCase().includes(query.toLowerCase())
-  ), [locations, query]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(locations));
-  }, [locations]);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEY && event.newValue) {
-        try { setLocations(JSON.parse(event.newValue)); } catch { /* ignore malformed external data */ }
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  useEffect(() => {
-    const key = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || (import.meta as any).env?.VITE_GOOGLE_MAPS_PUBLIC_KEY;
-    if (!key || !mapRef.current) return;
-    if ((window as any).google?.maps) { initialiseMap(); return; }
-    const existing = document.querySelector('script[data-ace-google-maps]');
-    if (existing) { existing.addEventListener('load', initialiseMap); return () => existing.removeEventListener('load', initialiseMap); }
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.aceGoogleMaps = 'true';
-    script.onload = initialiseMap;
-    document.head.appendChild(script);
-    return () => { script.onload = null; };
-  }, []);
-
-  useEffect(() => {
-    if (googleMapRef.current && selected) {
-      googleMapRef.current.panTo({ lat: selected.lat, lng: selected.lng });
-      googleMapRef.current.setZoom(15);
-    }
-  }, [selectedId]);
-
-  function initialiseMap() {
-    if (!mapRef.current || !(window as any).google?.maps) return;
-    const google = (window as any).google;
-    googleMapRef.current = new google.maps.Map(mapRef.current, {
-      center: selected ? { lat: selected.lat, lng: selected.lng } : { lat: 32.7767, lng: -96.797 },
-      zoom: 13,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: true,
-      clickableIcons: true,
-    });
-    renderMarkers();
-  }
-
-  function renderMarkers() {
-    if (!googleMapRef.current || !(window as any).google?.maps) return;
-    markersRef.current.forEach((marker) => marker.setMap(null));
-    markersRef.current = [];
-    const google = (window as any).google;
-    locations.filter((item) => item.visibility === 'public').forEach((item) => {
-      const marker = new google.maps.Marker({
-        map: googleMapRef.current,
-        position: { lat: item.lat, lng: item.lng },
-        title: item.name,
-        opacity: item.status === 'published' ? 1 : 0.55,
-      });
-      marker.addListener('click', () => setSelectedId(item.id));
-      markersRef.current.push(marker);
-    });
-  }
-
-  useEffect(() => { renderMarkers(); }, [locations]);
-
-  function openCreate() {
-    setEditingId(null); setForm(emptyForm); setShowEditor(true);
-  }
-
-  function openEdit(item: LocationRecord) {
-    setEditingId(item.id);
-    setForm({
-      name: item.name, address: item.address, lat: String(item.lat), lng: String(item.lng),
-      description: item.description, status: item.status, visibility: item.visibility,
-      bedrooms: String(item.house?.bedrooms ?? 0), bathrooms: String(item.house?.bathrooms ?? 0),
-      floors: String(item.house?.floors ?? 1), propertyType: item.house?.propertyType ?? 'Detached house',
-      modelUrl: item.house?.modelUrl ?? '',
-    });
-    setShowEditor(true);
-  }
-
-  function saveLocation(event: React.FormEvent) {
-    event.preventDefault();
-    const lat = Number(form.lat); const lng = Number(form.lng);
-    if (!form.name.trim() || !form.address.trim() || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-      notify('Add a name, address, latitude and longitude.'); return;
-    }
-    const next: LocationRecord = {
-      id: editingId ?? `loc_${Date.now()}`,
-      name: form.name.trim(), address: form.address.trim(), lat, lng,
-      description: form.description.trim(), status: form.status, visibility: form.visibility,
-      updatedAt: new Date().toISOString(),
-      house: { bedrooms: Number(form.bedrooms) || 0, bathrooms: Number(form.bathrooms) || 0, floors: Number(form.floors) || 1, propertyType: form.propertyType, modelUrl: form.modelUrl.trim() },
-    };
-    setLocations((current) => editingId ? current.map((item) => item.id === editingId ? next : item) : [next, ...current]);
-    setSelectedId(next.id); setShowEditor(false); notify(editingId ? 'Location updated live.' : 'Location published to this device.');
-  }
-
-  function removeLocation(id: string) {
-    if (!window.confirm('Delete this location from Ace’s Address Changer?')) return;
-    setLocations((current) => current.filter((item) => item.id !== id));
-    if (selectedId === id) setSelectedId(locations.find((item) => item.id !== id)?.id ?? '');
-    notify('Location removed.');
-  }
-
-  function togglePublished(item: LocationRecord) {
-    const nextStatus = item.status === 'published' ? 'draft' : 'published';
-    setLocations((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: nextStatus, updatedAt: new Date().toISOString() } : entry));
-    notify(nextStatus === 'published' ? 'Location published.' : 'Location moved to draft.');
-  }
-
-  function notify(message: string) { setToast(message); window.setTimeout(() => setToast(''), 2600); }
-
-  function exportData() {
-    const blob = new Blob([JSON.stringify(locations, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = 'aces-address-changer-locations.json'; a.click(); URL.revokeObjectURL(url); notify('Location data exported.');
-  }
-
-  function importData(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(String(reader.result));
-        if (!Array.isArray(data)) throw new Error('Expected an array');
-        setLocations(data); setSelectedId(data[0]?.id ?? ''); notify('Locations imported.');
-      } catch { notify('That JSON file could not be imported.'); }
-    };
-    reader.readAsText(file); event.target.value = '';
-  }
-
-  function shareLocation(item: LocationRecord) {
-    const url = `${window.location.origin}${window.location.pathname}#location=${encodeURIComponent(item.id)}`;
-    if (navigator.share) navigator.share({ title: item.name, text: item.address, url }).catch(() => {});
-    else { navigator.clipboard?.writeText(url); notify('Share link copied.'); }
-  }
-
-  function locateMe() {
-    navigator.geolocation?.getCurrentPosition(({ coords }) => {
-      if (googleMapRef.current) { googleMapRef.current.panTo({ lat: coords.latitude, lng: coords.longitude }); googleMapRef.current.setZoom(16); }
-      notify('Map centered on your current location.');
-    }, () => notify('Location permission was not available.'));
-  }
-
-  return (
-    <div className="ace-app">
-      <header className="topbar">
-        <div className="brand" onClick={() => setSelectedId(locations[0]?.id ?? '')}>
-          <div className="brand-mark"><MapPin size={20} /></div>
-          <div><strong>Ace’s Address Changer</strong><span>Live locations & property structures</span></div>
-        </div>
-        <nav className={showMobileNav ? 'nav open' : 'nav'}>
-          <button onClick={() => setSelectedId(locations[0]?.id ?? '')}>Map</button>
-          <button onClick={openCreate}>Add location</button>
-          <button onClick={() => setShowHelp(true)}>How it works</button>
-        </nav>
-        <div className="top-actions">
-          <button className="icon-btn" onClick={() => setShowHelp(true)} title="Help"><CircleHelp size={18} /></button>
-          <button className="primary-btn compact" onClick={openCreate}><Plus size={17} /> Publish</button>
-          <button className="icon-btn mobile-only" onClick={() => setShowMobileNav(!showMobileNav)}><Menu size={20} /></button>
-        </div>
-      </header>
-
-      <main className="workspace">
-        <aside className="sidebar">
-          <div className="sidebar-heading"><div><p className="eyebrow">CONTROL CENTER</p><h1>Locations</h1></div><span className="count">{locations.length}</span></div>
-          <div className="search"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search addresses…" /></div>
-          <div className="quick-actions">
-            <button onClick={openCreate}><Plus size={16} /> New location</button>
-            <button onClick={exportData}><Download size={16} /> Export</button>
-            <label><Upload size={16} /> Import<input type="file" accept="application/json" onChange={importData} hidden /></label>
-          </div>
-          <div className="location-list">
-            {filtered.map((item) => (
-              <button key={item.id} className={item.id === selected?.id ? 'location-card active' : 'location-card'} onClick={() => setSelectedId(item.id)}>
-                <div className="location-icon"><Home size={18} /></div>
-                <div className="location-copy"><strong>{item.name}</strong><span>{item.address}</span><small><i className={item.status === 'published' ? 'dot live' : 'dot'} /> {item.status === 'published' ? 'Published' : 'Draft'} · {item.house ? `${item.house.bedrooms} bed` : 'No structure'}</small></div>
-                <ChevronRight size={16} className="chevron" />
-              </button>
-            ))}
-            {!filtered.length && <div className="empty">No locations match your search.</div>}
-          </div>
-          <div className="sidebar-footer"><Zap size={15} /> <span>Cross-tab live sync enabled</span></div>
-        </aside>
-
-        <section className="map-stage">
-          <div ref={mapRef} className="map-canvas">
-            <div className="map-fallback"><MapPin size={30} /><strong>Interactive map</strong><span>Add <code>VITE_GOOGLE_MAPS_API_KEY</code> to show Google Maps.</span></div>
-          </div>
-          <div className="map-toolbar"><button onClick={locateMe}><LocateFixed size={17} /> Locate me</button><span><Layers3 size={16} /> {locations.filter(x => x.visibility === 'public').length} public pins</span></div>
-          {selected && <article className="property-panel">
-            <div className="panel-top"><div><p className="eyebrow">SELECTED LOCATION</p><h2>{selected.name}</h2></div><button className="icon-btn" onClick={() => setSelectedId('')}><X size={17} /></button></div>
-            <p className="address"><MapPin size={16} /> {selected.address}</p>
-            <p className="description">{selected.description || 'No description added yet.'}</p>
-            <div className="stats">
-              <div><span>Status</span><strong>{selected.status}</strong></div>
-              <div><span>Coordinates</span><strong>{selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}</strong></div>
-              <div><span>Visibility</span><strong>{selected.visibility}</strong></div>
-            </div>
-            {selected.house && <div className="house-summary"><div className="section-title"><Building2 size={17} /><strong>House structure</strong></div><div className="house-stats"><b>{selected.house.bedrooms}<small>Bedrooms</small></b><b>{selected.house.bathrooms}<small>Bathrooms</small></b><b>{selected.house.floors}<small>Floors</small></b></div>{selected.house.modelUrl ? <model-viewer className="model-viewer" src={selected.house.modelUrl} camera-controls auto-rotate shadow-intensity="1" /> : <div className="model-placeholder"><Building2 size={25} /><span>Add a public <code>.glb</code> URL to preview the 3D house.</span></div>}</div>}
-            <div className="panel-actions"><button className="primary-btn" onClick={() => openEdit(selected)}><Edit3 size={16} /> Edit</button><button onClick={() => togglePublished(selected)}>{selected.status === 'published' ? <EyeOff size={16} /> : <Eye size={16} />}{selected.status === 'published' ? 'Unpublish' : 'Publish'}</button><button onClick={() => shareLocation(selected)}><Share2 size={16} /> Share</button><button onClick={() => removeLocation(selected.id)} className="danger"><Trash2 size={16} /></button></div>
-          </article>}
-        </section>
-      </main>
-
-      {showEditor && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setShowEditor(false)}><form className="editor" onSubmit={saveLocation}><div className="editor-head"><div><p className="eyebrow">{editingId ? 'UPDATE LOCATION' : 'NEW LOCATION'}</p><h2>{editingId ? 'Edit published place' : 'Publish a location'}</h2></div><button type="button" className="icon-btn" onClick={() => setShowEditor(false)}><X size={18} /></button></div><div className="form-grid"><label>Name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Ace’s Home" /></label><label>Address<input required value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Full street address" /></label><label>Latitude<input required type="number" step="any" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} placeholder="32.7767" /></label><label>Longitude<input required type="number" step="any" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} placeholder="-96.7970" /></label><label>Publishing status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as any })}><option value="published">Published</option><option value="draft">Draft</option></select></label><label>Visibility<select value={form.visibility} onChange={(e) => setForm({ ...form, visibility: e.target.value as any })}><option value="public">Public</option><option value="private">Private</option></select></label></div><label>Description<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What should people know about this place?" rows={3} /></label><div className="form-section"><div className="section-title"><Building2 size={17} /><strong>House structure</strong><span>optional</span></div><div className="form-grid four"><label>Bedrooms<input type="number" min="0" value={form.bedrooms} onChange={(e) => setForm({ ...form, bedrooms: e.target.value })} /></label><label>Bathrooms<input type="number" min="0" value={form.bathrooms} onChange={(e) => setForm({ ...form, bathrooms: e.target.value })} /></label><label>Floors<input type="number" min="1" value={form.floors} onChange={(e) => setForm({ ...form, floors: e.target.value })} /></label><label>Type<select value={form.propertyType} onChange={(e) => setForm({ ...form, propertyType: e.target.value })}><option>Detached house</option><option>Apartment</option><option>Villa</option><option>Townhouse</option><option>Commercial</option><option>Land</option></select></label></div><label>3D model URL (.glb)<input value={form.modelUrl} onChange={(e) => setForm({ ...form, modelUrl: e.target.value })} placeholder="https://your-storage.example/house.glb" /></label></div><div className="editor-foot"><span><Settings2 size={15} /> Changes are saved locally and synced across open tabs.</span><div><button type="button" onClick={() => setShowEditor(false)}>Cancel</button><button className="primary-btn" type="submit">{editingId ? 'Save changes' : 'Publish location'}</button></div></div></form></div>}
-
-      {showHelp && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setShowHelp(false)}><div className="help-card"><div className="editor-head"><div><p className="eyebrow">ACE’S ADDRESS CHANGER</p><h2>Built for living locations</h2></div><button className="icon-btn" onClick={() => setShowHelp(false)}><X size={18} /></button></div><div className="help-grid"><div><MapPin size={20} /><strong>Publish</strong><span>Add a named place, coordinates, visibility and status.</span></div><div><Edit3 size={20} /><strong>Change</strong><span>Edit your own records without changing official government or Google addresses.</span></div><div><Building2 size={20} /><strong>Structure</strong><span>Attach bedrooms, floors and a 3D GLB model to a property.</span></div><div><QrCode size={20} /><strong>Share</strong><span>Send a location link so another person can open the selected record.</span></div></div><div className="roadmap"><strong>Next production upgrades</strong><span>Cloudflare D1 + R2 storage · Firebase/Google authentication · role-based editing · audit history · real-time WebSockets · geocoding + address validation · photo galleries · QR codes · moderation · analytics.</span></div></div></div>}
-      {toast && <div className="toast"><Zap size={16} /> {toast}</div>}
-    </div>
-  );
+export default function App(){
+  const [locations,setLocations]=useState<LocationRecord[]>(readLocations); const [selectedId,setSelectedId]=useState(locations[0]?.id??'');
+  const [query,setQuery]=useState(''); const [showEditor,setShowEditor]=useState(false); const [showMobileNav,setShowMobileNav]=useState(false); const [showHelp,setShowHelp]=useState(false); const [form,setForm]=useState(emptyForm); const [editingId,setEditingId]=useState<string|null>(null); const [toast,setToast]=useState('');
+  const mapRef=useRef<HTMLDivElement>(null); const googleMapRef=useRef<any>(null); const markersRef=useRef<any[]>([]);
+  const selected=locations.find(i=>i.id===selectedId)??locations[0]; const filtered=useMemo(()=>locations.filter(i=>`${i.name} ${i.address} ${i.description}`.toLowerCase().includes(query.toLowerCase())),[locations,query]);
+  useEffect(()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(locations))},[locations]);
+  useEffect(()=>{const onStorage=(e:StorageEvent)=>{if(e.key===STORAGE_KEY&&e.newValue)try{setLocations(JSON.parse(e.newValue))}catch{}};window.addEventListener('storage',onStorage);return()=>window.removeEventListener('storage',onStorage)},[]);
+  useEffect(()=>{const key=(import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY||(import.meta as any).env?.VITE_GOOGLE_MAPS_PUBLIC_KEY;if(!key||!mapRef.current)return;if((window as any).google?.maps){initialiseMap();return}const existing=document.querySelector('script[data-ace-google-maps]');if(existing){existing.addEventListener('load',initialiseMap);return()=>existing.removeEventListener('load',initialiseMap)}const script=document.createElement('script');script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;script.async=true;script.defer=true;script.dataset.aceGoogleMaps='true';script.onload=initialiseMap;document.head.appendChild(script);return()=>{script.onload=null}},[]);
+  useEffect(()=>{if(googleMapRef.current&&selected){googleMapRef.current.panTo({lat:selected.lat,lng:selected.lng});googleMapRef.current.setZoom(15)}},[selectedId]);
+  function initialiseMap(){if(!mapRef.current||!(window as any).google?.maps)return;const google=(window as any).google;googleMapRef.current=new google.maps.Map(mapRef.current,{center:selected?{lat:selected.lat,lng:selected.lng}:{lat:32.7767,lng:-96.797},zoom:13,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,clickableIcons:true});renderMarkers()}
+  function renderMarkers(){if(!googleMapRef.current||!(window as any).google?.maps)return;markersRef.current.forEach(m=>m.setMap(null));markersRef.current=[];const google=(window as any).google;locations.filter(i=>i.visibility==='public').forEach(i=>{const marker=new google.maps.Marker({map:googleMapRef.current,position:{lat:i.lat,lng:i.lng},title:i.name,opacity:i.status==='published'?1:.55});marker.addListener('click',()=>setSelectedId(i.id));markersRef.current.push(marker)})}
+  useEffect(()=>{renderMarkers()},[locations]);
+  function openCreate(){setEditingId(null);setForm(emptyForm);setShowEditor(true)}
+  function openEdit(i:LocationRecord){setEditingId(i.id);setForm({name:i.name,address:i.address,lat:String(i.lat),lng:String(i.lng),description:i.description,status:i.status,visibility:i.visibility,bedrooms:String(i.house?.bedrooms??0),bathrooms:String(i.house?.bathrooms??0),floors:String(i.house?.floors??1),propertyType:i.house?.propertyType??'Detached house',modelUrl:i.house?.modelUrl??''});setShowEditor(true)}
+  function saveLocation(e:FormEvent){e.preventDefault();const lat=Number(form.lat),lng=Number(form.lng);if(!form.name.trim()||!form.address.trim()||!Number.isFinite(lat)||!Number.isFinite(lng)){notify('Add a name, address, latitude and longitude.');return}const next:LocationRecord={id:editingId??`loc_${Date.now()}`,name:form.name.trim(),address:form.address.trim(),lat,lng,description:form.description.trim(),status:form.status,visibility:form.visibility,updatedAt:new Date().toISOString(),house:{bedrooms:Number(form.bedrooms)||0,bathrooms:Number(form.bathrooms)||0,floors:Number(form.floors)||1,propertyType:form.propertyType,modelUrl:form.modelUrl.trim()}};setLocations(cur=>editingId?cur.map(i=>i.id===editingId?next:i):[next,...cur]);setSelectedId(next.id);setShowEditor(false);notify(editingId?'Location updated live.':'Location published to this device.')}
+  function removeLocation(id:string){if(!window.confirm('Delete this location from Ace’s Address Changer?'))return;setLocations(cur=>cur.filter(i=>i.id!==id));if(selectedId===id)setSelectedId(locations.find(i=>i.id!==id)?.id??'');notify('Location removed.')}
+  function togglePublished(i:LocationRecord){const status=i.status==='published'?'draft':'published';setLocations(cur=>cur.map(x=>x.id===i.id?{...x,status,updatedAt:new Date().toISOString()}:x));notify(status==='published'?'Location published.':'Location moved to draft.')}
+  function notify(message:string){setToast(message);window.setTimeout(()=>setToast(''),2600)}
+  function exportData(){const blob=new Blob([JSON.stringify(locations,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='aces-address-changer-locations.json';a.click();URL.revokeObjectURL(url);notify('Location data exported.')}
+  function importData(e:ChangeEvent<HTMLInputElement>){const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(String(reader.result));if(!Array.isArray(data))throw new Error();setLocations(data);setSelectedId(data[0]?.id??'');notify('Locations imported.')}catch{notify('That JSON file could not be imported.')}};reader.readAsText(file);e.target.value=''}
+  function shareLocation(i:LocationRecord){const url=`${window.location.origin}${window.location.pathname}#location=${encodeURIComponent(i.id)}`;if(navigator.share)navigator.share({title:i.name,text:i.address,url}).catch(()=>{});else{navigator.clipboard?.writeText(url);notify('Share link copied.')}}
+  function locateMe(){navigator.geolocation?.getCurrentPosition(({coords})=>{if(googleMapRef.current){googleMapRef.current.panTo({lat:coords.latitude,lng:coords.longitude});googleMapRef.current.setZoom(16)}notify('Map centered on your current location.')},()=>notify('Location permission was not available.'))}
+  return <div className="ace-app">
+    <header className="topbar"><div className="brand" onClick={()=>setSelectedId(locations[0]?.id??'')}><div className="brand-mark"><MapPin size={20}/></div><div><strong>Ace’s Address Changer</strong><span>Live locations & property structures</span></div></div><nav className={showMobileNav?'nav open':'nav'}><button onClick={()=>setSelectedId(locations[0]?.id??'')}>Map</button><button onClick={openCreate}>Add location</button><button onClick={()=>setShowHelp(true)}>How it works</button></nav><div className="top-actions"><button className="icon-btn" onClick={()=>setShowHelp(true)} title="Help"><CircleHelp size={18}/></button><button className="primary-btn compact" onClick={openCreate}><Plus size={17}/> Publish</button><button className="icon-btn mobile-only" onClick={()=>setShowMobileNav(!showMobileNav)}><Menu size={20}/></button></div></header>
+    <main className="workspace"><aside className="sidebar"><div className="sidebar-heading"><div><p className="eyebrow">CONTROL CENTER</p><h1>Locations</h1></div><span className="count">{locations.length}</span></div><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search addresses…"/></div><div className="quick-actions"><button onClick={openCreate}><Plus size={16}/> New</button><button onClick={exportData}><Download size={16}/> Export</button><label><Upload size={16}/> Import<input type="file" accept="application/json" onChange={importData} hidden/></label></div><div className="location-list">{filtered.map(i=><button key={i.id} className={i.id===selected?.id?'location-card active':'location-card'} onClick={()=>setSelectedId(i.id)}><div className="location-icon"><Home size={18}/></div><div className="location-copy"><strong>{i.name}</strong><span>{i.address}</span><small><i className={i.status==='published'?'dot live':'dot'}/> {i.status==='published'?'Published':'Draft'} · {i.house?`${i.house.bedrooms} bed`:'No structure'}</small></div><ChevronRight size={16} className="chevron"/></button>)}{!filtered.length&&<div className="empty">No locations match your search.</div>}</div><div className="sidebar-footer"><Zap size={15}/> <span>Cross-tab live sync enabled</span></div></aside>
+      <section className="map-stage"><div ref={mapRef} className="map-canvas"><div className="map-fallback"><MapPin size={30}/><strong>Interactive map</strong><span>Add <code>VITE_GOOGLE_MAPS_API_KEY</code> to show Google Maps.</span></div></div><div className="map-toolbar"><button onClick={locateMe}><LocateFixed size={17}/> Locate me</button><span><Layers3 size={16}/> {locations.filter(x=>x.visibility==='public').length} public pins</span></div>{selected&&<article className="property-panel"><div className="panel-top"><div><p className="eyebrow">SELECTED LOCATION</p><h2>{selected.name}</h2></div><button className="icon-btn" onClick={()=>setSelectedId('')}><X size={17}/></button></div><p className="address"><MapPin size={16}/>{selected.address}</p><p className="description">{selected.description||'No description added yet.'}</p><div className="stats"><div><span>Status</span><strong>{selected.status}</strong></div><div><span>Coordinates</span><strong>{selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}</strong></div><div><span>Visibility</span><strong>{selected.visibility}</strong></div></div>{selected.house&&<div className="house-summary"><div className="section-title"><Building2 size={17}/><strong>House structure</strong></div><div className="house-stats"><b>{selected.house.bedrooms}<small>Bedrooms</small></b><b>{selected.house.bathrooms}<small>Bathrooms</small></b><b>{selected.house.floors}<small>Floors</small></b></div>{selected.house.modelUrl?<model-viewer className="model-viewer" src={selected.house.modelUrl} camera-controls auto-rotate shadow-intensity="1"/>:<div className="model-placeholder"><Building2 size={25}/><span>Add a public <code>.glb</code> URL to preview the 3D house.</span></div>}</div>}<div className="panel-actions"><button className="primary-btn" onClick={()=>openEdit(selected)}><Edit3 size={16}/> Edit</button><button onClick={()=>togglePublished(selected)}>{selected.status==='published'?<EyeOff size={16}/>:<Eye size={16}/>} {selected.status==='published'?'Unpublish':'Publish'}</button><button onClick={()=>shareLocation(selected)}><Share2 size={16}/> Share</button><button onClick={()=>removeLocation(selected.id)} className="danger"><Trash2 size={16}/></button></div></article>}</section>
+    </main>
+    {showEditor&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setShowEditor(false)}><form className="editor" onSubmit={saveLocation}><div className="editor-head"><div><p className="eyebrow">{editingId?'UPDATE LOCATION':'NEW LOCATION'}</p><h2>{editingId?'Edit published place':'Publish a location'}</h2></div><button type="button" className="icon-btn" onClick={()=>setShowEditor(false)}><X size={18}/></button></div><div className="form-grid"><label>Name<input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Ace’s Home"/></label><label>Address<input required value={form.address} onChange={e=>setForm({...form,address:e.target.value})} placeholder="Full street address"/></label><label>Latitude<input required type="number" step="any" value={form.lat} onChange={e=>setForm({...form,lat:e.target.value})} placeholder="32.7767"/></label><label>Longitude<input required type="number" step="any" value={form.lng} onChange={e=>setForm({...form,lng:e.target.value})} placeholder="-96.7970"/></label><label>Publishing status<select value={form.status} onChange={e=>setForm({...form,status:e.target.value as any})}><option value="published">Published</option><option value="draft">Draft</option></select></label><label>Visibility<select value={form.visibility} onChange={e=>setForm({...form,visibility:e.target.value as any})}><option value="public">Public</option><option value="private">Private</option></select></label></div><label>Description<textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="What should people know about this place?" rows={3}/></label><div className="form-section"><div className="section-title"><Building2 size={17}/><strong>House structure</strong><span>optional</span></div><div className="form-grid four"><label>Bedrooms<input type="number" min="0" value={form.bedrooms} onChange={e=>setForm({...form,bedrooms:e.target.value})}/></label><label>Bathrooms<input type="number" min="0" value={form.bathrooms} onChange={e=>setForm({...form,bathrooms:e.target.value})}/></label><label>Floors<input type="number" min="1" value={form.floors} onChange={e=>setForm({...form,floors:e.target.value})}/></label><label>Type<select value={form.propertyType} onChange={e=>setForm({...form,propertyType:e.target.value})}><option>Detached house</option><option>Apartment</option><option>Villa</option><option>Townhouse</option><option>Commercial</option><option>Land</option></select></label></div><label>3D model URL (.glb)<input value={form.modelUrl} onChange={e=>setForm({...form,modelUrl:e.target.value})} placeholder="https://your-storage.example/house.glb"/></label></div><div className="editor-foot"><span><Settings2 size={15}/> Changes are saved locally and synced across open tabs.</span><div><button type="button" onClick={()=>setShowEditor(false)}>Cancel</button><button className="primary-btn" type="submit">{editingId?'Save changes':'Publish location'}</button></div></div></form></div>}
+    {showHelp&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setShowHelp(false)}><div className="help-card"><div className="editor-head"><div><p className="eyebrow">ACE’S ADDRESS CHANGER</p><h2>Built for living locations</h2></div><button className="icon-btn" onClick={()=>setShowHelp(false)}><X size={18}/></button></div><div className="help-grid"><div><MapPin size={20}/><strong>Publish</strong><span>Add a named place, coordinates, visibility and status.</span></div><div><Edit3 size={20}/><strong>Change</strong><span>Edit your own records without changing official government or Google addresses.</span></div><div><Building2 size={20}/><strong>Structure</strong><span>Attach bedrooms, floors and a 3D GLB model to a property.</span></div><div><QrCode size={20}/><strong>Share</strong><span>Send a location link so another person can open the selected record.</span></div></div><div className="roadmap"><strong>Next production upgrades</strong><span>Cloudflare D1 + R2 storage · authentication · role-based editing · audit history · real-time WebSockets · geocoding + address validation · photo galleries · QR codes · moderation · analytics.</span></div></div></div>}
+    {toast&&<div className="toast"><Zap size={16}/>{toast}</div>}
+  </div>
 }
